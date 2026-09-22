@@ -1,0 +1,55 @@
+{
+  "inventory": [
+    {
+      "id": 1,
+      "name": "Pasta Penne (5kg)",
+      "category": "Pasta / Riso",
+      "qty": 6,
+      "unit": "Confezioni",
+      "expiry": "2027-08-15",
+      "lastMod": "2026-06-01 (KY)"
+    },
+    {
+      "id": 2,
+      "name": "Pelati di Pomodoro",
+      "category": "Scatolame",
+      "qty": 24,
+      "unit": "Pezzi",
+      "expiry": "2026-06-28",
+      "lastMod": "2026-06-05 (KY)"
+    },
+    {
+      "id": 3,
+      "name": "Tonno in scatola",
+      "category": "Scatolame",
+      "qty": 2,
+      "unit": "Scatole",
+      "expiry": "2026-06-20",
+      "lastMod": "2026-06-02 (AB)"
+    },
+    {
+      "id": 4,
+      "name": "Olio di Semi",
+      "category": "Condimenti",
+      "qty": 5,
+      "unit": "Litri",
+      "expiry": "2025-12-10",
+      "lastMod": "2025-10-01 (KY)"
+    },
+    {
+      "id": 5,
+      "name": "Farina 00",
+      "category": "Colazione",
+      "qty": 10,
+      "unit": "Kg",
+      "expiry": "2026-09-30",
+      "lastMod": "2026-05-12 (AB)"
+    }
+  ],
+  "historyLog": [
+    {
+      "date": "2026-06-05 10:15",
+      "text": "Inserito inventario iniziale sede scout (KY)"
+    }
+  ]
+}
