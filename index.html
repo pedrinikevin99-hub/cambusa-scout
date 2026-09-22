@@ -1,0 +1,786 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cambusa Scout - Gestione Sede</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- SheetJS (xlsx) per importare/esportare Excel -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <!-- FontAwesome Icone -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @media print {
+            .no-print { display: none !important; }
+            body { background: white !important; color: black !important; }
+            .shadow, .shadow-md, .shadow-xl { box-shadow: none !important; }
+            table { width: 100% !important; border-collapse: collapse !important; }
+            th, td { border: 1px solid #cbd5e1 !important; padding: 6px !important; }
+        }
+    </style>
+</head>
+<body class="bg-emerald-50 text-slate-800 min-h-screen font-sans flex flex-col justify-between">
+
+    <!-- SCHERMATA LOGIN -->
+    <div id="loginScreen" class="fixed inset-0 bg-emerald-900 flex items-center justify-center z-50 p-4">
+        <div class="bg-white w-full max-w-sm rounded-2xl shadow-2xl p-8 space-y-6 text-center">
+            <div class="inline-flex bg-emerald-100 text-emerald-800 p-4 rounded-full text-3xl">
+                <i class="fa-solid fa-campground"></i>
+            </div>
+            <div>
+                <h2 class="text-2xl font-bold text-slate-800">Cambusa Scout</h2>
+                <p class="text-xs text-slate-500 mt-1">Inserisci le tue iniziali per accedere (Es. KPE)</p>
+            </div>
+            <form onsubmit="handleLogin(event)" class="space-y-4">
+                <input type="text" id="loginInitials" required placeholder="Es. KPE" maxlength="5" class="w-full text-center uppercase tracking-widest text-xl font-bold px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-500">
+                <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-3 rounded-xl transition shadow">Accedi</button>
+            </form>
+            <p id="loginError" class="text-xs text-rose-500 hidden">Iniziali non autorizzate. Chiedi al Capo Cambusa di registrarti.</p>
+        </div>
+    </div>
+
+    <!-- CONTENUTO PRINCIPALE -->
+    <div id="appContainer" class="hidden flex-1 flex flex-col">
+        <!-- Header -->
+        <header class="bg-emerald-800 text-white shadow-md no-print">
+            <div class="max-w-7xl mx-auto px-4 py-4 flex flex-col md:flex-row justify-between items-center gap-4">
+                <div class="flex items-center space-x-3">
+                    <i class="fa-solid fa-campground text-3xl text-emerald-300"></i>
+                    <div>
+                        <h1 class="text-2xl font-bold">Cambusa Scout</h1>
+                        <p class="text-emerald-200 text-sm">Utente attivo: <span id="currentUserDisplay" class="font-bold underline"></span></p>
+                    </div>
+                </div>
+                <div class="flex flex-wrap gap-2 items-center">
+                    <button onclick="openConfigModal()" class="bg-emerald-700 hover:bg-emerald-600 text-white px-3 py-2 rounded-lg transition flex items-center gap-2 text-sm shadow" title="Impostazioni & Utenti">
+                        <i class="fa-solid fa-gear"></i> Gestione
+                    </button>
+                    <label class="bg-emerald-700 hover:bg-emerald-600 text-white px-3 py-2 rounded-lg cursor-pointer transition flex items-center gap-2 text-sm shadow">
+                        <i class="fa-solid fa-file-excel"></i> Importa Excel
+                        <input type="file" id="excelFile" accept=".xlsx, .xls" class="hidden" onchange="importExcel(event)">
+                    </label>
+                    <button onclick="exportExcel()" class="bg-emerald-700 hover:bg-emerald-600 text-white px-3 py-2 rounded-lg transition flex items-center gap-2 text-sm shadow">
+                        <i class="fa-solid fa-file-arrow-down"></i> Esporta Excel
+                    </button>
+                    <button onclick="window.print()" class="bg-emerald-700 hover:bg-emerald-600 text-white px-3 py-2 rounded-lg transition flex items-center gap-2 text-sm shadow">
+                        <i class="fa-solid fa-print"></i> Stampa
+                    </button>
+                    <button onclick="logout()" class="bg-rose-700 hover:bg-rose-600 text-white px-3 py-2 rounded-lg transition flex items-center gap-2 text-sm shadow">
+                        <i class="fa-solid fa-right-from-bracket"></i> Esci
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <main class="max-w-7xl mx-auto px-4 py-6 space-y-6 w-full flex-1">
+
+            <!-- Dashboard Statistiche -->
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 no-print">
+                <div class="bg-white p-4 rounded-xl shadow border-l-4 border-emerald-600 flex items-center justify-between">
+                    <div>
+                        <p class="text-xs uppercase font-bold text-slate-400">Totale Articoli</p>
+                        <h3 id="statTotal" class="text-2xl font-black text-slate-700">0</h3>
+                    </div>
+                    <div class="bg-emerald-100 text-emerald-700 p-3 rounded-full"><i class="fa-solid fa-boxes-stacked text-xl"></i></div>
+                </div>
+                <div class="bg-white p-4 rounded-xl shadow border-l-4 border-amber-500 flex items-center justify-between">
+                    <div>
+                        <p class="text-xs uppercase font-bold text-slate-400">In Scadenza (≤ 7 gg)</p>
+                        <h3 id="statExpiring" class="text-2xl font-black text-amber-600">0</h3>
+                    </div>
+                    <div class="bg-amber-100 text-amber-600 p-3 rounded-full"><i class="fa-solid fa-triangle-exclamation text-xl"></i></div>
+                </div>
+                <div class="bg-white p-4 rounded-xl shadow border-l-4 border-rose-600 flex items-center justify-between">
+                    <div>
+                        <p class="text-xs uppercase font-bold text-slate-400">Scaduti</p>
+                        <h3 id="statExpired" class="text-2xl font-black text-rose-600">0</h3>
+                    </div>
+                    <div class="bg-rose-100 text-rose-600 p-3 rounded-full"><i class="fa-solid fa-ban text-xl"></i></div>
+                </div>
+            </div>
+
+            <!-- Filtri e Azioni -->
+            <div class="bg-white p-4 rounded-xl shadow flex flex-col md:flex-row justify-between items-center gap-4 no-print">
+                <div class="flex flex-wrap gap-3 w-full md:w-auto items-center">
+                    <div class="relative flex-1 md:w-72">
+                        <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400"><i class="fa-solid fa-search"></i></span>
+                        <input type="text" id="searchInput" placeholder="Cerca alimento..." onkeyup="renderTable()" class="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-emerald-500">
+                    </div>
+                    <select id="filterCategory" onchange="renderTable()" class="py-2 px-3 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-emerald-500">
+                        <option value="">Tutte le categorie</option>
+                    </select>
+                    <select id="filterStatus" onchange="renderTable()" class="py-2 px-3 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-emerald-500">
+                        <option value="">Tutti gli stati</option>
+                        <option value="ok">Regolare</option>
+                        <option value="in_scadenza">In scadenza</option>
+                        <option value="scaduto">Scaduto</option>
+                    </select>
+                </div>
+                <button onclick="openAddModal()" class="w-full md:w-auto bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-medium transition flex items-center justify-center gap-2 shadow text-sm">
+                    <i class="fa-solid fa-plus"></i> Nuovo Articolo
+                </button>
+            </div>
+
+            <!-- Tabella Inventario -->
+            <div class="bg-white rounded-xl shadow overflow-hidden">
+                <div class="p-4 border-b border-slate-100 hidden print:block">
+                    <h2 class="text-xl font-bold">Inventario Cambusa Sede Scout</h2>
+                    <p class="text-xs text-slate-500">Stampato il: <span id="printDate"></span></p>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-slate-100 text-slate-600 uppercase text-xs tracking-wider border-b border-slate-200">
+                                <th class="p-3">Stato</th>
+                                <th class="p-3">Alimento</th>
+                                <th class="p-3">Categoria</th>
+                                <th class="p-3 text-center">Quantità Rapida</th>
+                                <th class="p-3">Scadenza</th>
+                                <th class="p-3 text-center no-print">Azioni</th>
+                            </tr>
+                        </thead>
+                        <tbody id="inventoryTableBody" class="divide-y divide-slate-100 text-sm text-slate-700">
+                            <!-- Popolato via JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Registro Modifiche a scomparsa -->
+            <div class="bg-white rounded-xl shadow p-5 no-print">
+                <div class="flex justify-between items-center cursor-pointer" onclick="toggleHistory()">
+                    <h3 class="font-bold text-slate-700 flex items-center gap-2">
+                        <i class="fa-solid fa-clock-rotate-left text-emerald-600"></i> Registro Modifiche e Scarichi 
+                        <span id="historyArrow" class="text-xs text-slate-400">▼ (Mostra)</span>
+                    </h3>
+                    <button onclick="event.stopPropagation(); clearHistory()" class="text-xs text-rose-500 hover:underline">Svuota Storico</button>
+                </div>
+                <div id="historyContainer" class="hidden mt-3 max-h-48 overflow-y-auto text-xs space-y-2 border border-slate-100 rounded-lg p-3 bg-slate-50">
+                    <p class="text-slate-400 italic">Nessuna modifica recente registrata.</p>
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+    <!-- Modale Dettaglio Alimento con Foto -->
+    <div id="detailModal" class="fixed inset-0 bg-black/50 hidden flex items-center justify-center z-50 p-4">
+        <div class="bg-white w-full max-w-lg rounded-2xl shadow-xl overflow-hidden p-6 space-y-4">
+            <div class="flex justify-between items-center">
+                <h3 id="detailName" class="font-bold text-xl text-slate-800">Dettaglio Alimento</h3>
+                <button onclick="closeDetailModal()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-xl"></i></button>
+            </div>
+            <div class="flex flex-col sm:flex-row gap-4 items-center">
+                <div class="w-40 h-40 bg-slate-100 rounded-xl overflow-hidden border border-slate-200 flex-shrink-0 flex items-center justify-center relative">
+                    <img id="detailImg" src="" alt="Foto Alimento" class="w-full h-full object-cover hidden">
+                    <div id="detailNoImg" class="text-slate-400 text-xs text-center p-2"><i class="fa-solid fa-image text-2xl mb-1"></i><br>Nessuna foto</div>
+                </div>
+                <div class="space-y-2 flex-1 text-sm">
+                    <p><strong>Categoria:</strong> <span id="detailCategory" class="text-slate-600"></span></p>
+                    <p><strong>Quantità:</strong> <span id="detailQty" class="text-slate-600 font-bold"></span></p>
+                    <p><strong>Scadenza:</strong> <span id="detailExpiry" class="text-slate-600"></span></p>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mt-2 mb-1">URL Foto (Link immagine web):</label>
+                        <div class="flex gap-2">
+                            <input type="url" id="detailImgUrlInput" placeholder="https://..." class="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:outline-none focus:border-emerald-500">
+                            <button onclick="saveItemPhoto()" class="bg-emerald-600 text-white px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-emerald-700">Aggiorna</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="pt-3 flex justify-end">
+                <button onclick="closeDetailModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg text-sm font-medium transition">Chiudi</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modale Aggiungi / Modifica Articolo -->
+    <div id="itemModal" class="fixed inset-0 bg-black/50 hidden flex items-center justify-center z-50 p-4">
+        <div class="bg-white w-full max-w-md rounded-2xl shadow-xl overflow-hidden p-6 space-y-4">
+            <div class="flex justify-between items-center">
+                <h3 id="modalTitle" class="font-bold text-lg text-slate-800">Nuovo Articolo</h3>
+                <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-xl"></i></button>
+            </div>
+            <form id="itemForm" onsubmit="saveItem(event)" class="space-y-3">
+                <input type="hidden" id="itemId">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">Nome Alimento *</label>
+                    <input type="text" id="itemName" required class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-emerald-500">
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">Categoria *</label>
+                        <select id="itemCategory" required class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-emerald-500"></select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">Unità di Misura *</label>
+                        <select id="itemUnit" required class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-emerald-500"></select>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">Quantità *</label>
+                        <input type="number" id="itemQty" step="any" min="0" required class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-emerald-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">Data Scadenza *</label>
+                        <input type="date" id="itemExpiry" required class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-emerald-500">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">URL Foto (Opzionale)</label>
+                    <input type="url" id="itemImgUrl" placeholder="https://..." class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-emerald-500">
+                </div>
+                <div class="pt-3 flex justify-end gap-2">
+                    <button type="button" onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg text-sm font-medium transition">Annulla</button>
+                    <button type="submit" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-medium transition shadow">Salva</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modale Gestione Impostazioni / Utenti / Categorie / Unità -->
+    <div id="configModal" class="fixed inset-0 bg-black/50 hidden flex items-center justify-center z-50 p-4">
+        <div class="bg-white w-full max-w-lg rounded-2xl shadow-xl overflow-hidden p-6 space-y-6 max-h-[90vh] overflow-y-auto">
+            <div class="flex justify-between items-center">
+                <h3 class="font-bold text-lg text-slate-800"><i class="fa-solid fa-gear text-emerald-600"></i> Pannello di Gestione Sede</h3>
+                <button onclick="closeConfigModal()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-xl"></i></button>
+            </div>
+
+            <!-- Utenti -->
+            <div class="space-y-2 border-b border-slate-100 pb-4">
+                <h4 class="font-semibold text-sm text-slate-700">Utenti Autorizzati (Iniziali)</h4>
+                <div class="flex gap-2">
+                    <input type="text" id="newUserInput" placeholder="Es. AB" maxlength="5" class="uppercase px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-sm flex-1 focus:outline-none focus:border-emerald-500">
+                    <button onclick="addUser()" class="bg-emerald-600 text-white px-4 py-1.5 rounded-lg text-sm font-medium hover:bg-emerald-700">Aggiungi</button>
+                </div>
+                <div id="usersListContainer" class="flex flex-wrap gap-2 pt-2"></div>
+            </div>
+
+            <!-- Categorie -->
+            <div class="space-y-2 border-b border-slate-100 pb-4">
+                <h4 class="font-semibold text-sm text-slate-700">Gestione Categorie Alimenti</h4>
+                <div class="flex gap-2">
+                    <input type="text" id="newCatInput" placeholder="Nuova categoria..." class="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-sm flex-1 focus:outline-none focus:border-emerald-500">
+                    <button onclick="addCategory()" class="bg-emerald-600 text-white px-4 py-1.5 rounded-lg text-sm font-medium hover:bg-emerald-700">Aggiungi</button>
+                </div>
+                <div id="categoriesListContainer" class="flex flex-wrap gap-2 pt-2"></div>
+            </div>
+
+            <!-- Unità -->
+            <div class="space-y-2">
+                <h4 class="font-semibold text-sm text-slate-700">Gestione Unità di Misura</h4>
+                <div class="flex gap-2">
+                    <input type="text" id="newUnitInput" placeholder="Nuova unità (es. Barattoli)..." class="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-sm flex-1 focus:outline-none focus:border-emerald-500">
+                    <button onclick="addUnit()" class="bg-emerald-600 text-white px-4 py-1.5 rounded-lg text-sm font-medium hover:bg-emerald-700">Aggiungi</button>
+                </div>
+                <div id="unitsListContainer" class="flex flex-wrap gap-2 pt-2"></div>
+            </div>
+
+            <div class="pt-3 flex justify-end">
+                <button onclick="closeConfigModal()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-medium transition">Salva e Chiudi</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Script Logica -->
+    <script>
+        let currentUser = localStorage.getItem('scout_current_user') || null;
+
+        let authorizedUsers = JSON.parse(localStorage.getItem('scout_users')) || ['KPE', 'MR', 'AB', 'GS'];
+        let categories = JSON.parse(localStorage.getItem('scout_categories')) || ['Scatolame', 'Pasta / Riso', 'Bevande', 'Freschi', 'Condimenti', 'Colazione'];
+        let units = JSON.parse(localStorage.getItem('scout_units')) || ['Pezzi', 'Kg', 'Litri', 'Scatole', 'Confezioni'];
+
+        let inventory = JSON.parse(localStorage.getItem('scout_inventory')) || [
+            { id: 1, name: 'Pasta Penne (5kg)', category: 'Pasta / Riso', qty: 6, unit: 'Confezioni', expiry: '2027-08-15', img: '' },
+            { id: 2, name: 'Pelati di Pomodoro', category: 'Scatolame', qty: 24, unit: 'Pezzi', expiry: '2026-06-28', img: '' }
+        ];
+
+        let historyLog = JSON.parse(localStorage.getItem('scout_history')) || [
+            { date: '2026-06-05 10:15', text: 'Inizializzazione sistema cambusa scout' }
+        ];
+
+        let activeDetailId = null;
+
+        window.onload = function() {
+            if (currentUser && authorizedUsers.includes(currentUser)) {
+                showApp();
+            } else {
+                showLogin();
+            }
+        };
+
+        function handleLogin(e) {
+            e.preventDefault();
+            const val = document.getElementById('loginInitials').value.toUpperCase().trim();
+            if (authorizedUsers.includes(val)) {
+                currentUser = val;
+                localStorage.setItem('scout_current_user', currentUser);
+                showApp();
+            } else {
+                document.getElementById('loginError').classList.remove('hidden');
+            }
+        }
+
+        function logout() {
+            currentUser = null;
+            localStorage.removeItem('scout_current_user');
+            showLogin();
+        }
+
+        function showLogin() {
+            document.getElementById('loginScreen').classList.remove('hidden');
+            document.getElementById('appContainer').classList.add('hidden');
+            document.getElementById('loginInitials').value = '';
+            document.getElementById('loginError').classList.add('hidden');
+        }
+
+        function showApp() {
+            document.getElementById('loginScreen').classList.add('hidden');
+            document.getElementById('appContainer').classList.remove('hidden');
+            document.getElementById('currentUserDisplay').innerText = currentUser;
+            renderDashboard();
+            renderTable();
+            renderHistory();
+        }
+
+        function saveData() {
+            localStorage.setItem('scout_inventory', JSON.stringify(inventory));
+            localStorage.setItem('scout_history', JSON.stringify(historyLog));
+            localStorage.setItem('scout_users', JSON.stringify(authorizedUsers));
+            localStorage.setItem('scout_categories', JSON.stringify(categories));
+            localStorage.setItem('scout_units', JSON.stringify(units));
+            renderDashboard();
+            renderTable();
+            renderHistory();
+        }
+
+        function logAction(text) {
+            const now = new Date();
+            const timeStr = now.toISOString().slice(0, 10) + ' ' + now.toTimeString().slice(0, 5);
+            historyLog.unshift({ date: timeStr, text: `${text} (${currentUser})` });
+            if (historyLog.length > 50) historyLog.pop();
+        }
+
+        function getStatus(expiryDateStr) {
+            const oggi = new Date();
+            oggi.setHours(0,0,0,0);
+            const scadenza = new Date(expiryDateStr);
+            scadenza.setHours(0,0,0,0);
+            
+            const diffDays = Math.ceil((scadenza - oggi) / (1000 * 60 * 60 * 24));
+            
+            if (diffDays < 0) return { status: 'scaduto', label: 'Scaduto', color: 'bg-rose-100 text-rose-700 border-rose-300', dot: 'bg-rose-500' };
+            if (diffDays <= 7) return { status: 'in_scadenza', label: `Scade tra ${diffDays} gg`, color: 'bg-amber-100 text-amber-700 border-amber-300', dot: 'bg-amber-500' };
+            return { status: 'ok', label: `Tra ${diffDays} gg`, color: 'bg-emerald-100 text-emerald-700 border-emerald-300', dot: 'bg-emerald-500' };
+        }
+
+        function renderDashboard() {
+            document.getElementById('statTotal').innerText = inventory.length;
+            
+            let expiringCount = 0;
+            let expiredCount = 0;
+
+            inventory.forEach(item => {
+                const s = getStatus(item.expiry).status;
+                if (s === 'in_scadenza') expiringCount++;
+                if (s === 'scaduto') expiredCount++;
+            });
+
+            document.getElementById('statExpiring').innerText = expiringCount;
+            document.getElementById('statExpired').innerText = expiredCount;
+
+            const filterCat = document.getElementById('filterCategory');
+            const currentCatVal = filterCat.value;
+            filterCat.innerHTML = '<option value="">Tutte le categorie</option>';
+            categories.sort().forEach(cat => {
+                const opt = document.createElement('option');
+                opt.value = cat;
+                opt.innerText = cat;
+                if (cat === currentCatVal) opt.selected = true;
+                filterCat.appendChild(opt);
+            });
+            
+            document.getElementById('printDate').innerText = new Date().toLocaleDateString();
+        }
+
+        function renderTable() {
+            const tbody = document.getElementById('inventoryTableBody');
+            const searchTxt = document.getElementById('searchInput').value.toLowerCase();
+            const catFilter = document.getElementById('filterCategory').value;
+            const statusFilter = document.getElementById('filterStatus').value;
+
+            tbody.innerHTML = '';
+
+            const filtered = inventory.filter(item => {
+                const matchSearch = item.name.toLowerCase().includes(searchTxt) || item.category.toLowerCase().includes(searchTxt);
+                const matchCat = !catFilter || item.category === catFilter;
+                const statInfo = getStatus(item.expiry);
+                const matchStatus = !statusFilter || statInfo.status === statusFilter;
+                return matchSearch && matchCat && matchStatus;
+            });
+
+            if (filtered.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="6" class="p-6 text-center text-slate-400 italic">Nessun articolo trovato nella cambusa.</td></tr>`;
+                return;
+            }
+
+            filtered.forEach(item => {
+                const stat = getStatus(item.expiry);
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-50 transition border-b border-slate-100";
+                
+                tr.innerHTML = `
+                    <td class="p-3">
+                        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border ${stat.color}">
+                            <span class="w-1.5 h-1.5 rounded-full ${stat.dot}"></span> ${stat.label}
+                        </span>
+                    </td>
+                    <td class="p-3 font-medium text-slate-800 cursor-pointer hover:text-emerald-600 flex items-center gap-2" onclick="openDetailModal(${item.id})">
+                        ${item.img ? `<img src="${item.img}" class="w-7 h-7 object-cover rounded-md border">` : `<div class="w-7 h-7 bg-slate-100 rounded-md flex items-center justify-center text-slate-400 text-xs"><i class="fa-solid fa-image"></i></div>`}
+                        <span>${item.name}</span>
+                    </td>
+                    <td class="p-3"><span class="bg-slate-100 text-slate-600 px-2 py-0.5 rounded text-xs">${item.category}</span></td>
+                    <td class="p-3 text-center">
+                        <div class="inline-flex items-center space-x-1 bg-slate-100 rounded-lg p-1 no-print">
+                            <button onclick="quickModify(${item.id}, -1)" class="w-7 h-7 bg-white rounded shadow-sm hover:bg-rose-50 hover:text-rose-600 flex items-center justify-center font-bold text-slate-600 transition">-</button>
+                            <span class="w-12 text-center font-semibold text-slate-700">${item.qty} <span class="text-[10px] text-slate-400 font-normal">${item.unit}</span></span>
+                            <button onclick="quickModify(${item.id}, 1)" class="w-7 h-7 bg-white rounded shadow-sm hover:bg-emerald-50 hover:text-emerald-600 flex items-center justify-center font-bold text-slate-600 transition">+</button>
+                        </div>
+                        <span class="print:inline hidden font-semibold">${item.qty} ${item.unit}</span>
+                    </td>
+                    <td class="p-3 text-slate-600">${item.expiry}</td>
+                    <td class="p-3 text-center space-x-1 no-print">
+                        <button onclick="openEditModal(${item.id})" class="p-1.5 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded transition" title="Modifica dettagli"><i class="fa-solid fa-pen"></i></button>
+                        <button onclick="deleteItem(${item.id})" class="p-1.5 bg-rose-50 text-rose-600 hover:bg-rose-100 rounded transition" title="Elimina"><i class="fa-solid fa-trash"></i></button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function renderHistory() {
+            const container = document.getElementById('historyContainer');
+            if (historyLog.length === 0) {
+                container.innerHTML = `<p class="text-slate-400 italic">Nessuna modifica recente registrata.</p>`;
+                return;
+            }
+            container.innerHTML = historyLog.map(h => `<div class="flex justify-between items-center border-b border-slate-100 pb-1"><span class="text-slate-700">${h.text}</span><span class="text-slate-400 font-mono">${h.date}</span></div>`).join('');
+        }
+
+        function toggleHistory() {
+            const container = document.getElementById('historyContainer');
+            const arrow = document.getElementById('historyArrow');
+            if (container.classList.contains('hidden')) {
+                container.classList.remove('hidden');
+                arrow.innerText = '▲ (Nascondi)';
+            } else {
+                container.classList.add('hidden');
+                arrow.innerText = '▼ (Mostra)';
+            }
+        }
+
+        function quickModify(id, delta) {
+            const item = inventory.find(i => i.id === id);
+            if (!item) return;
+            const newQty = item.qty + delta;
+            if (newQty < 0) return;
+
+            const oldQty = item.qty;
+            item.qty = newQty;
+            logAction(`Aggiornato "${item.name}": ${oldQty} ➔ ${newQty} ${item.unit}`);
+            saveData();
+        }
+
+        function openDetailModal(id) {
+            activeDetailId = id;
+            const item = inventory.find(i => i.id === id);
+            if (!item) return;
+
+            document.getElementById('detailName').innerText = item.name;
+            document.getElementById('detailCategory').innerText = item.category;
+            document.getElementById('detailQty').innerText = `${item.qty} ${item.unit}`;
+            document.getElementById('detailExpiry').innerText = item.expiry;
+            document.getElementById('detailImgUrlInput').value = item.img || '';
+
+            const imgEl = document.getElementById('detailImg');
+            const noImgEl = document.getElementById('detailNoImg');
+            if (item.img) {
+                imgEl.src = item.img;
+                imgEl.classList.remove('hidden');
+                noImgEl.classList.add('hidden');
+            } else {
+                imgEl.src = '';
+                imgEl.classList.add('hidden');
+                noImgEl.classList.remove('hidden');
+            }
+
+            document.getElementById('detailModal').classList.remove('hidden');
+        }
+
+        function closeDetailModal() {
+            document.getElementById('detailModal').classList.add('hidden');
+            activeDetailId = null;
+        }
+
+        function saveItemPhoto() {
+            if (!activeDetailId) return;
+            const item = inventory.find(i => i.id === activeDetailId);
+            if (!item) return;
+            const url = document.getElementById('detailImgUrlInput').value.trim();
+            item.img = url;
+            logAction(`Aggiornata foto per "${item.name}"`);
+            saveData();
+            openDetailModal(activeDetailId);
+        }
+
+        function populateDropdowns(selectedCat = '', selectedUnit = '') {
+            const catSelect = document.getElementById('itemCategory');
+            catSelect.innerHTML = categories.map(c => `<option value="${c}" ${c === selectedCat ? 'selected' : ''}>${c}</option>`).join('');
+
+            const unitSelect = document.getElementById('itemUnit');
+            unitSelect.innerHTML = units.map(u => `<option value="${u}" ${u === selectedUnit ? 'selected' : ''}>${u}</option>`).join('');
+        }
+
+        function openAddModal() {
+            document.getElementById('modalTitle').innerText = 'Nuovo Articolo';
+            document.getElementById('itemId').value = '';
+            document.getElementById('itemName').value = '';
+            document.getElementById('itemQty').value = 1;
+            document.getElementById('itemExpiry').value = new Date().toISOString().slice(0, 10);
+            document.getElementById('itemImgUrl').value = '';
+            populateDropdowns();
+            document.getElementById('itemModal').classList.remove('hidden');
+        }
+
+        function openEditModal(id) {
+            const item = inventory.find(i => i.id === id);
+            if (!item) return;
+            document.getElementById('modalTitle').innerText = 'Modifica Articolo';
+            document.getElementById('itemId').value = item.id;
+            document.getElementById('itemName').value = item.name;
+            document.getElementById('itemQty').value = item.qty;
+            document.getElementById('itemExpiry').value = item.expiry;
+            document.getElementById('itemImgUrl').value = item.img || '';
+            populateDropdowns(item.category, item.unit);
+            document.getElementById('itemModal').classList.remove('hidden');
+        }
+
+        function closeModal() {
+            document.getElementById('itemModal').classList.add('hidden');
+        }
+
+        function saveItem(e) {
+            e.preventDefault();
+            const id = document.getElementById('itemId').value;
+            const name = document.getElementById('itemName').value.trim();
+            const category = document.getElementById('itemCategory').value;
+            const qty = parseFloat(document.getElementById('itemQty').value);
+            const unit = document.getElementById('itemUnit').value;
+            const expiry = document.getElementById('itemExpiry').value;
+            const img = document.getElementById('itemImgUrl').value.trim();
+
+            if (id) {
+                const item = inventory.find(i => i.id == id);
+                if (item) {
+                    item.name = name;
+                    item.category = category;
+                    item.qty = qty;
+                    item.unit = unit;
+                    item.expiry = expiry;
+                    item.img = img;
+                    logAction(`Modificato articolo "${name}"`);
+                }
+            } else {
+                const newId = inventory.length > 0 ? Math.max(...inventory.map(i => i.id)) + 1 : 1;
+                inventory.push({ id: newId, name, category, qty, unit, expiry, img });
+                logAction(`Aggiunto nuovo articolo "${name}" (${qty} ${unit})`);
+            }
+
+            closeModal();
+            saveData();
+        }
+
+        function deleteItem(id) {
+            const item = inventory.find(i => i.id === id);
+            if (!item) return;
+            if (confirm(`Vuoi eliminare "${item.name}" dalla cambusa?`)) {
+                inventory = inventory.filter(i => i.id !== id);
+                logAction(`Eliminato articolo "${item.name}"`);
+                saveData();
+            }
+        }
+
+        function clearHistory() {
+            if (confirm("Vuoi svuotare il registro delle modifiche?")) {
+                historyLog = [];
+                saveData();
+            }
+        }
+
+        function openConfigModal() {
+            renderConfigLists();
+            document.getElementById('configModal').classList.remove('hidden');
+        }
+
+        function closeConfigModal() {
+            document.getElementById('configModal').classList.add('hidden');
+            renderDashboard();
+            renderTable();
+        }
+
+        function renderConfigLists() {
+            const userContainer = document.getElementById('usersListContainer');
+            userContainer.innerHTML = authorizedUsers.map(u => `
+                <span class="inline-flex items-center gap-1.5 bg-slate-100 text-slate-700 px-3 py-1 rounded-full text-xs font-semibold">
+                    ${u} ${authorizedUsers.length > 1 ? `<button onclick="removeUser('${u}')" class="text-rose-500 hover:text-rose-700 ml-1"><i class="fa-solid fa-xmark"></i></button>` : ''}
+                </span>
+            `).join('');
+
+            const catContainer = document.getElementById('categoriesListContainer');
+            catContainer.innerHTML = categories.map(c => `
+                <span class="inline-flex items-center gap-1.5 bg-slate-100 text-slate-700 px-3 py-1 rounded-full text-xs font-semibold">
+                    ${c} <button onclick="removeCategory('${c}')" class="text-rose-500 hover:text-rose-700 ml-1"><i class="fa-solid fa-xmark"></i></button>
+                </span>
+            `).join('');
+
+            const unitContainer = document.getElementById('unitsListContainer');
+            unitContainer.innerHTML = units.map(u => `
+                <span class="inline-flex items-center gap-1.5 bg-slate-100 text-slate-700 px-3 py-1 rounded-full text-xs font-semibold">
+                    ${u} <button onclick="removeUnit('${u}')" class="text-rose-500 hover:text-rose-700 ml-1"><i class="fa-solid fa-xmark"></i></button>
+                </span>
+            `).join('');
+        }
+
+        function addUser() {
+            const input = document.getElementById('newUserInput');
+            const val = input.value.toUpperCase().trim();
+            if (val && !authorizedUsers.includes(val)) {
+                authorizedUsers.push(val);
+                input.value = '';
+                renderConfigLists();
+                saveData();
+            }
+        }
+
+        function removeUser(u) {
+            if (authorizedUsers.length <= 1) return alert("Deve esserci almeno un utente autorizzato.");
+            authorizedUsers = authorizedUsers.filter(item => item !== u);
+            renderConfigLists();
+            saveData();
+        }
+
+        function addCategory() {
+            const input = document.getElementById('newCatInput');
+            const val = input.value.trim();
+            if (val && !categories.includes(val)) {
+                categories.push(val);
+                input.value = '';
+                renderConfigLists();
+                saveData();
+            }
+        }
+
+        function removeCategory(c) {
+            categories = categories.filter(item => item !== c);
+            renderConfigLists();
+            saveData();
+        }
+
+        function addUnit() {
+            const input = document.getElementById('newUnitInput');
+            const val = input.value.trim();
+            if (val && !units.includes(val)) {
+                units.push(val);
+                input.value = '';
+                renderConfigLists();
+                saveData();
+            }
+        }
+
+        function removeUnit(u) {
+            units = units.filter(item => item !== u);
+            renderConfigLists();
+            saveData();
+        }
+
+        // Importazione Excel
+        function importExcel(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(evt) {
+                try {
+                    const data = new Uint8Array(evt.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+                    const json = XLSX.utils.sheet_to_json(worksheet);
+
+                    if (json.length === 0) return alert("File Excel vuoto.");
+
+                    let importedCount = 0;
+                    let maxId = inventory.length > 0 ? Math.max(...inventory.map(i => i.id)) : 0;
+
+                    json.forEach(row => {
+                        const name = row['Alimento'] || row['Nome'] || row['Articolo'] || Object.values(row)[0];
+                        const category = row['Categoria'] || categories[0] || 'Generale';
+                        const qty = parseFloat(row['Quantità'] || row['Q.tà'] || 1);
+                        const unit = row['Unità'] || units[0] || 'Pezzi';
+                        let expiry = row['Scadenza'] || '2027-01-01';
+
+                        if (name) {
+                            maxId++;
+                            inventory.push({
+                                id: maxId,
+                                name: String(name),
+                                category: String(category),
+                                qty: isNaN(qty) ? 1 : qty,
+                                unit: String(unit),
+                                expiry: String(expiry).slice(0, 10),
+                                img: ''
+                            });
+                            importedCount++;
+                        }
+                    });
+
+                    logAction(`Importati ${importedCount} articoli da file Excel`);
+                    saveData();
+                    alert(`Importazione completata! Aggiunti ${importedCount} articoli.`);
+                } catch (err) {
+                    console.error(err);
+                    alert("Errore nella lettura del file Excel.");
+                }
+                e.target.value = '';
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        // Esportazione Excel
+        function exportExcel() {
+            if (inventory.length === 0) {
+                alert("La cambusa è vuota, non c'è nulla da esportare.");
+                return;
+            }
+
+            const dataToExport = inventory.map(item => ({
+                "Alimento": item.name,
+                "Categoria": item.category,
+                "Quantità": item.qty,
+                "Unità": item.unit,
+                "Scadenza": item.expiry,
+                "Link Foto": item.img || ""
+            }));
+
+            const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, "Cambusa Scout");
+
+            XLSX.writeFile(workbook, `cambusa_scout_${new Date().toISOString().slice(0,10)}.xlsx`);
+            logAction("Esportata la lista in formato Excel");
+            saveData();
+        }
+    </script>
+</body>
+</html>
